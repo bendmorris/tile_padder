@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# usage: python tile_padder.py (tileset) (tile size) (old padding) (new padding)
 import sys
 import pygame
 import math
