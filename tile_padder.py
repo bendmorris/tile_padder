@@ -9,7 +9,6 @@ def run(args):
     tile_size = args.tile_size
     old_padding = args.old_padding
     new_padding = args.padding
-    alpha = args.alpha
 
     old_tile = tile_size + old_padding * 2
     new_tile = tile_size + new_padding * 2
@@ -31,75 +30,67 @@ def run(args):
     surf.set_alpha(True)
 
     # fill in tile pixels
-    for x in range(width / old_tile):
-        for y in range(height / old_tile):
+    for x in range(width // old_tile):
+        for y in range(height // old_tile):
             for xi in range(tile_size):
                 for yi in range(tile_size):
                     color = image.get_at((x*old_tile + old_padding + xi, y*old_tile + old_padding + yi))
                     surf.set_at((x*new_tile + new_padding + xi, y*new_tile + new_padding + yi), color)
 
-    def average_color(colors):
-        r = 0
-        g = 0
-        b = 0
-        for (ri, gi, bi, _) in colors:
-            r += ri
-            g += gi
-            b += bi
-        return (int(round(r/len(colors))), int(round(g/len(colors))), int(round(b/len(colors))), alpha)
+    if args.bleed:
+        def average_color(colors):
+            r = 0
+            g = 0
+            b = 0
+            a = 0
+            for (ri, gi, bi, ai) in colors:
+                r += ri
+                g += gi
+                b += bi
+                a += ai
+            return (int(round(r/len(colors))), int(round(g/len(colors))), int(round(b/len(colors))), int(round(a/len(colors))))
 
-    # fill in transparent pixels with average of surrounding values to avoid bleed
-    for x in range(width / old_tile):
-        for y in range(height / old_tile):
-            cs = []
-            for xi in range(tile_size):
-                for yi in range(tile_size):
-                    c = surf.get_at((x*new_tile + new_padding + xi, y*new_tile + new_padding + yi))
-                    if c.a > 0:
-                        cs.append((xi, yi, c))
+        # fill in transparent pixels with average of surrounding values to avoid bleed
+        for x in range(width // old_tile):
+            for y in range(height // old_tile):
+                cs = []
+                for xi in range(tile_size):
+                    for yi in range(tile_size):
+                        c = surf.get_at((x*new_tile + new_padding + xi, y*new_tile + new_padding + yi))
+                        if c.a > 0:
+                            cs.append((xi, yi, c))
 
-            if len(cs) == 0: continue
+                if len(cs) == 0: continue
 
-            def get_value(xi, yi):
-                min_d = min([abs(xi-xii) + abs(yi-yii) for (xii, yii, c) in cs])
-                colors = [c for (xii, yii, c) in cs if abs(xi-xii) + abs(yi-yii) == min_d]
-                return average_color(colors)
+                def get_value(xi, yi):
+                    min_d = min([abs(xi-xii) + abs(yi-yii) for (xii, yii, c) in cs])
+                    colors = [c for (xii, yii, c) in cs if abs(xi-xii) + abs(yi-yii) == min_d]
+                    return average_color(colors)
 
-            for xi in range(tile_size):
-                for yi in range(tile_size):
-                    c = surf.get_at((x*new_tile + new_padding + xi, y*new_tile + new_padding + yi))
-                    if c.a == 0:
-                        surf.set_at((x*new_tile + new_padding + xi, y*new_tile + new_padding + yi), get_value(xi, yi))
+                # fill spacing with transparent color values to avoid black bleed
+                for i in range(new_tile):
+                    # top left corner
+                    if i == 0:
+                        color = surf.get_at((x*new_tile + new_padding, y*new_tile + new_padding))
+                        for xi in range(new_padding):
+                            for yi in range(new_padding):
+                                surf.set_at((x*new_tile + xi, y*new_tile + yi), color)
+                        continue
+                    elif i < new_padding: continue
 
-            # fill spacing with transparent color values to avoid black bleed
-            for i in range(new_tile):
-                # top left corner
-                if i == 0:
-                    color = surf.get_at((x*new_tile + new_padding, y*new_tile + new_padding))
-                    color.a = alpha
-                    for xi in range(new_padding):
-                        for yi in range(new_padding):
-                            surf.set_at((x*new_tile + xi, y*new_tile + yi), color)
-                    continue
-                elif i < new_padding: continue
-
-                for bi in range(new_padding):
-                    # top padding
-                    color = surf.get_at((x*new_tile + i, y*new_tile + new_padding))
-                    color.a = alpha
-                    surf.set_at((x*new_tile + i, y*new_tile + bi), color)
-                    # bottom padding
-                    color = surf.get_at((x*new_tile + i, y*new_tile + new_padding + tile_size - 1))
-                    color.a = alpha
-                    surf.set_at((x*new_tile + i, y*new_tile + new_padding + tile_size + bi), color)
-                    # left padding
-                    color = surf.get_at((x*new_tile + new_padding, y*new_tile + i))
-                    color.a = alpha
-                    surf.set_at((x*new_tile + bi, y*new_tile + i), color)
-                    # right padding
-                    color = surf.get_at((x*new_tile + new_padding + tile_size - 1, y*new_tile + i))
-                    color.a = alpha
-                    surf.set_at((x*new_tile + new_padding + tile_size + bi, y*new_tile + i), color)
+                    for bi in range(new_padding):
+                        # top padding
+                        color = surf.get_at((x*new_tile + i, y*new_tile + new_padding))
+                        surf.set_at((x*new_tile + i, y*new_tile + bi), color)
+                        # bottom padding
+                        color = surf.get_at((x*new_tile + i, y*new_tile + new_padding + tile_size - 1))
+                        surf.set_at((x*new_tile + i, y*new_tile + new_padding + tile_size + bi), color)
+                        # left padding
+                        color = surf.get_at((x*new_tile + new_padding, y*new_tile + i))
+                        surf.set_at((x*new_tile + bi, y*new_tile + i), color)
+                        # right padding
+                        color = surf.get_at((x*new_tile + new_padding + tile_size - 1, y*new_tile + i))
+                        surf.set_at((x*new_tile + new_padding + tile_size + bi, y*new_tile + i), color)
 
     pygame.image.save(surf, output_file)
 
@@ -113,9 +104,9 @@ def main():
                         help='output file path (extension ignored, none to modify in place)')
     parser.add_argument('--pot', action='store_true', help='make the dimensions of the resulting output file a power of two')
     parser.add_argument('--square', action='store_true', help='make the dimensions of the resulting output file equal')
+    parser.add_argument('--bleed', action='store_true', help='add bleed correction')
     parser.add_argument('--padding', '-p', type=int, default=1, help='amount to pad each side of the tiles')
     parser.add_argument('--old-padding', type=int, default=0, help='if provided, amount of padding this tileset already contains')
-    parser.add_argument('--alpha', type=int, default=255, help='alpha of padding (0-255)')
 
     args = parser.parse_args()
 
